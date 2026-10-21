@@ -124,11 +124,19 @@ class TenantLicense(UserAuditModel):
             request._license_access_cache[cache_key] = False
             return False
 
-        licence = cls.objects.filter(
-            user=est.user,
-            module_code=module_code,
-            is_active=True
-        ).first()
+        if is_free_tag:
+            # Support hybride : rattaché au module parent OU débloqué en addon autonome (ex: free-graphix ou graphix)
+            licence = cls.objects.filter(
+                user=est.user,
+                module_code__in=[module_code, perm.tag, f"free-{perm.tag}"],
+                is_active=True
+            ).first()
+        else:
+            licence = cls.objects.filter(
+                user=est.user,
+                module_code=module_code,
+                is_active=True
+            ).first()
 
         if not licence:
             request._license_access_cache[cache_key] = False
