@@ -46,18 +46,28 @@ class UnlockModuleView(APIView):
 
             # 4. Enregistrement de la licence (Ajout ou mise à jour) pour l'Utilisateur
             codes_to_process = included_mods if included_mods else [module_code]
-            allowed_pages = request.data.get('allowed_pages', [])
+            # Support unifié : accepte allowed_tags ou allowed_pages en repli
+            incoming_tags = request.data.get('allowed_tags')
+            if incoming_tags is None:
+                incoming_tags = request.data.get('allowed_pages', [])
+
+            expires_at = request.data.get('expires_at')
             
             for code in codes_to_process:
                 if not code:
                     continue
+                defaults_dict = {
+                    'is_active': is_active,
+                    'allowed_tags': incoming_tags,
+                    'allowed_pages': incoming_tags,  # Synchronisation double pour rétrocompatibilité totale
+                }
+                if expires_at is not None:
+                    defaults_dict['expires_at'] = expires_at
+
                 TenantLicense.objects.update_or_create(
                     user=owner,
                     module_code=code,
-                    defaults={
-                        'is_active': is_active,
-                        'allowed_pages': allowed_pages
-                    }
+                    defaults=defaults_dict
                 )
 
             status_str = "unlocked" if is_active else "revoked"

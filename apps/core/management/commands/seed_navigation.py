@@ -36,7 +36,10 @@ class Command(BaseCommand):
         Page.all_objects.all().hard_delete()
         Module.all_objects.all().hard_delete()
         
-        for mod_data in MODULE_STRUCTURE:
+        for mod_item in MODULE_STRUCTURE:
+            if not isinstance(mod_item, dict):
+                continue
+            mod_data = dict(mod_item)
             pages_data = mod_data.pop('pages', [])
             mod_code = f"mod-{slugify(str(mod_data.get('name', '')))}"
             icon_name = mod_data.get('icon', '')

@@ -28,9 +28,31 @@ class TenantLicense(UserAuditModel):
     allowed_pages = models.JSONField(
         default=list,
         blank=True,
-        help_text="Liste des tags/pages autorisés pour ce module. Si vide, toutes les pages du module sont autorisées.",
-        verbose_name="Pages Autorisées"
+        help_text="Liste des tags/pages autorisés pour ce module (conservé pour rétrocompatibilité).",
+        verbose_name="Pages Autorisées (Legacy)"
     )
+    allowed_tags = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Liste unifiée des tags autorisés pour ce module (pages ou options transversales).",
+        verbose_name="Tags Autorisés"
+    )
+    expires_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Date d'expiration de la licence (null = illimitée)",
+        verbose_name="Date d'Expiration"
+    )
+
+    def get_effective_tags(self):
+        """
+        Règle d'or du repli 'OR' :
+        Si allowed_tags contient des éléments, on l'utilise en priorité.
+        Sinon, on se rabat sur l'ancien allowed_pages pour rétrocompatibilité.
+        """
+        if self.allowed_tags:
+            return self.allowed_tags
+        return self.allowed_pages or []
 
     class Meta:
         unique_together = ['user', 'module_code']
@@ -67,16 +89,32 @@ class TenantLicense(UserAuditModel):
             return True
 
         # 2. Récupération de la page et du module liés à ce tag
-        page = Page.objects.filter(permission_tags__contains=perm.tag).first()
-        if not page:
-            request._license_access_cache[cache_key] = True
-            return True
+        # IMPORTANT : le lookup JSON `__contains` n'est PAS supporté sur SQLite (mode Hub local).
+        # On filtre en Python pour rester 100% agnostique PostgreSQL & SQLite.
+        page = next(
+            (
+                p
+                for p in Page.objects.select_related("module")
+                if perm.tag in (p.permission_tags or [])
+            ),
+            None,
+        )
 
-        module = page.module
-        core_codes = ['mod-referentiel', 'mod-administration']
-        if module.code in core_codes:
-            request._license_access_cache[cache_key] = True
-            return True
+        is_free_tag = False
+        if page:
+            module_code = page.module.code
+            core_codes = ['mod-referentiel', 'mod-administration']
+            if module_code in core_codes:
+                request._license_access_cache[cache_key] = True
+                return True
+        else:
+            from apps.core.constants.licensing import FREE_TAG_MODULE_MAP
+            if perm.tag in FREE_TAG_MODULE_MAP:
+                module_code = FREE_TAG_MODULE_MAP[perm.tag]
+                is_free_tag = True
+            else:
+                request._license_access_cache[cache_key] = True
+                return True
 
         # 3. Vérification de la licence pour ce module
         from django.core.exceptions import ObjectDoesNotExist
@@ -88,7 +126,7 @@ class TenantLicense(UserAuditModel):
 
         licence = cls.objects.filter(
             user=est.user,
-            module_code=module.code,
+            module_code=module_code,
             is_active=True
         ).first()
 
@@ -96,9 +134,22 @@ class TenantLicense(UserAuditModel):
             request._license_access_cache[cache_key] = False
             return False
 
-        # 4. Si la licence a des restrictions, le tag de la permission doit être présent
-        if licence.allowed_pages:
-            if perm.tag not in licence.allowed_pages:
+        # 3.5. Vérification d'expiration de la licence
+        from django.utils import timezone
+        if licence.expires_at and licence.expires_at < timezone.now():
+            request._license_access_cache[cache_key] = False
+            return False
+
+        # 4. Si la licence a des restrictions (tags spécifiés), ou s'il s'agit d'un tag libre optionnel
+        effective_tags = licence.get_effective_tags()
+        if is_free_tag:
+            # Un tag libre optionnel doit impérativement figurer dans les tags autorisés
+            if perm.tag not in effective_tags:
+                request._license_access_cache[cache_key] = False
+                return False
+        elif effective_tags:
+            # Pour une page standard, si des restrictions sont définies, le tag doit y figurer
+            if perm.tag not in effective_tags:
                 request._license_access_cache[cache_key] = False
                 return False
 

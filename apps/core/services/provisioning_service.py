@@ -90,7 +90,11 @@ class ProvisioningService:
                             TenantLicense.objects.update_or_create(
                                 user=user,
                                 module_code=code,
-                                defaults={'is_active': True}
+                                defaults={
+                                    'is_active': True,
+                                    'allowed_tags': [],
+                                    'allowed_pages': []
+                                }
                             )
 
                 # 5. Envoi de l'email de bienvenue (si activé et nouvel utilisateur)

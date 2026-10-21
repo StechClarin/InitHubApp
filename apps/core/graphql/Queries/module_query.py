@@ -35,8 +35,9 @@ class ModuleQuery:
                 unlocked_codes = []
                 for lic in active_licenses:
                     unlocked_codes.append(lic.module_code)
-                    if lic.allowed_pages:
-                        license_restrictions[lic.module_code] = lic.allowed_pages
+                    effective_tags = lic.get_effective_tags() if hasattr(lic, 'get_effective_tags') else (getattr(lic, 'allowed_tags', None) or lic.allowed_pages)
+                    if effective_tags:
+                        license_restrictions[lic.module_code] = effective_tags
             except Establishment.DoesNotExist:
                 unlocked_codes = []
 
@@ -87,14 +88,14 @@ class ModuleQuery:
         for module in all_modules:
             allowed_pages_in_module = []
             
-            # Récupère les restrictions de licence pour ce module
-            mod_license_pages = license_restrictions.get(module.code, [])
+            # Récupère les restrictions de licence (tags autorisés) pour ce module
+            mod_license_tags = license_restrictions.get(module.code, [])
             
             for page in module.pages.all():
                 # 3.1. Vérification au niveau de la licence du Tenant
-                if mod_license_pages:
+                if mod_license_tags:
                     page_tags = set(page.permission_tags) if page.permission_tags else set()
-                    if not page_tags.intersection(set(mod_license_pages)):
+                    if not page_tags.intersection(set(mod_license_tags)):
                         continue
 
                 # 3.2. Vérification au niveau de l'utilisateur

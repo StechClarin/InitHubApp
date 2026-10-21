@@ -5,6 +5,7 @@ from .views.sync import InitialSyncView, SyncInView, SyncDeltaView, PushDeltaVie
 from .views.sync_assets import AssetManifestView, AssetTransferView
 from .views.ping import PingView
 from .views.health import HealthView
+from .views.catalog_manifest import CatalogManifestView
 
 urlpatterns = [
     path('external/provision-tenant/', ProvisionTenantView.as_view(), name='provision_tenant'),
@@ -15,6 +16,7 @@ urlpatterns = [
     path('external/push-delta/', PushDeltaView.as_view(), name='push_delta'),
     path('external/sync-assets/manifest/', AssetManifestView.as_view(), name='sync_assets_manifest'),
     path('external/sync-assets/transfer/', AssetTransferView.as_view(), name='sync_assets_transfer'),
+    path('external/catalog-manifest/', CatalogManifestView.as_view(), name='catalog_manifest'),
     path('external/ping/', PingView.as_view(), name='ping'),
     path('core/health/', HealthView.as_view(), name='health'),
 ]
