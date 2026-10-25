@@ -109,12 +109,8 @@ class TenantLicense(UserAuditModel):
                 return True
         else:
             from apps.core.constants.licensing import FREE_TAG_MODULE_MAP
-            if perm.tag in FREE_TAG_MODULE_MAP:
-                module_code = FREE_TAG_MODULE_MAP[perm.tag]
-                is_free_tag = True
-            else:
-                request._license_access_cache[cache_key] = True
-                return True
+            module_code = FREE_TAG_MODULE_MAP.get(perm.tag, "mod-free")
+            is_free_tag = True
 
         # 3. Vérification de la licence pour ce module
         from django.core.exceptions import ObjectDoesNotExist
@@ -125,10 +121,10 @@ class TenantLicense(UserAuditModel):
             return False
 
         if is_free_tag:
-            # Support hybride : rattaché au module parent OU débloqué en addon autonome (ex: free-graphix ou graphix)
+            # Support hybride : conteneur générique 'mod-free', module parent, tag brut ou préfixé
             licence = cls.objects.filter(
                 user=est.user,
-                module_code__in=[module_code, perm.tag, f"free-{perm.tag}"],
+                module_code__in=["mod-free", module_code, perm.tag, f"free-{perm.tag}"],
                 is_active=True
             ).first()
         else:

@@ -6,7 +6,7 @@ from rest_framework import status
 from django.utils.text import slugify
 
 from apps.core.management.commands.seed_navigation import MODULE_STRUCTURE
-from apps.core.constants.licensing import FREE_TAGS_CONFIG
+from apps.core.management.commands.seed_access import GROUP_STRUCTURE
 
 class CatalogManifestView(APIView):
     """
@@ -14,7 +14,8 @@ class CatalogManifestView(APIView):
     --------------------------------------------------
     Renvoie la liste dynamique de tous les modules de l'application,
     leurs pages avec tags associés, ainsi que les options transversales (free_tags).
-    Permet au Store (port_folio) et au Hub d'adapter leurs licences sans hardcoder les codes.
+    Calcul automatique : tout tag présent dans seed_access non rattaché à une page
+    de seed_navigation est extrait comme Free Tag.
     """
     authentication_classes = []
     permission_classes = []
@@ -32,6 +33,7 @@ class CatalogManifestView(APIView):
 
         # 2. Construction dynamique des modules et de leurs tags
         modules_manifest = []
+        all_nav_tags = set()
 
         for mod in MODULE_STRUCTURE:
             if not isinstance(mod, dict):
@@ -50,6 +52,7 @@ class CatalogManifestView(APIView):
                 p_tags = p.get('tags', [])
                 if isinstance(p_tags, list):
                     mod_tags.update(p_tags)
+                    all_nav_tags.update(p_tags)
                 pages_list.append({
                     "title": p.get('title', ''),
                     "link": p.get('link', ''),
@@ -66,6 +69,23 @@ class CatalogManifestView(APIView):
                 "pages": pages_list
             })
 
+        # 3. Extraction dynamique des Free Tags depuis seed_access (GROUP_STRUCTURE)
+        free_tags_manifest = []
+        seen_tags = set()
+
+        for group in GROUP_STRUCTURE:
+            if not isinstance(group, dict):
+                continue
+            tag = group.get('tag')
+            if tag and tag not in all_nav_tags and tag not in seen_tags:
+                seen_tags.add(tag)
+                free_tags_manifest.append({
+                    "tag": tag,
+                    "label": group.get('name', tag),
+                    "description": f"Capacité transversale système ({group.get('name', tag)})",
+                    "permissions": [p.get('codename') for p in group.get('permissions', []) if isinstance(p, dict)]
+                })
+
         app_name = os.environ.get('APP_NAME', 'InitHub Starter')
         app_code = os.environ.get('APP_CODE', 'inithub-starter')
 
@@ -73,5 +93,5 @@ class CatalogManifestView(APIView):
             "app_name": app_name,
             "app_code": app_code,
             "modules": modules_manifest,
-            "free_tags": FREE_TAGS_CONFIG
+            "free_tags": free_tags_manifest
         }, status=status.HTTP_200_OK)

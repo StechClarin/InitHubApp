@@ -55,6 +55,11 @@ class Command(BaseCommand):
                 )
                 if p_created:
                     self.stdout.write(f"    Permission '{perm.codename}' créée.")
+                else:
+                    if perm.tag != tag or perm.name != perm_data['name']:
+                        perm.tag = tag
+                        perm.name = perm_data['name']
+                        perm.save()
                 group.permissions.add(perm)
             self.stdout.write(getattr(self.style, 'SUCCESS', lambda x: x)(f"  ✔ Permissions pour '{group_name}' synchronisées."))
         self.stdout.write(getattr(self.style, 'SUCCESS', lambda x: x)("--- Seeding Access terminé ---"))
