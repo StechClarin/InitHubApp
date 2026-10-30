@@ -12,10 +12,16 @@ class EmailOrUsernameModelBackend(ModelBackend):
         # Récupération du Tenant verrouillé par le Hub
         hub_tenant_id = request.session.get('hub_tenant_id') if request else None
         
-        try:
-            # On cherche un user qui matche username OU email
-            user = User.objects.get(Q(username=username) | Q(email=username))
-        except User.DoesNotExist:
+        if not username:
+            return None
+
+        clean_identifier = str(username).strip()
+        # On cherche un user qui matche username OU email de manière insensible à la casse (iexact)
+        user = User.objects.filter(
+            Q(username__iexact=clean_identifier) | Q(email__iexact=clean_identifier)
+        ).first()
+
+        if not user:
             return None
 
         # --- VERIFICATION DU DOUBLE LOCK ---

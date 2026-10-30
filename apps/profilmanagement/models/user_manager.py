@@ -10,16 +10,23 @@ class UserManager(BaseUserManager):
     def get_queryset(self):
         return SoftDeleteQuerySet(self.model, using=self._db).filter(is_deleted=False)
 
+    def get_by_natural_key(self, username):
+        """
+        Permet l'authentification insensible à la casse sur USERNAME_FIELD
+        """
+        return self.get(**{f"{self.model.USERNAME_FIELD}__iexact": str(username).strip()})
+
     def create_user(self, username, email, password=None, **extra_fields):
         """
-        Crée et sauvegarde un utilisateur avec un email et un mot de passe.
+        Crée et sauvegarde un utilisateur avec un email et un mot de passe normalisés.
         """
         if not username:
             raise ValueError("Le nom d'utilisateur est obligatoire")
         if not email:
             raise ValueError("L'email est obligatoire")
         
-        email = self.normalize_email(email)
+        username = str(username).strip().lower()
+        email = self.normalize_email(email).strip().lower()
         user = self.model(username=username, email=email, **extra_fields)
         user.set_password(password)
         user.save(using=self._db)
